@@ -1,0 +1,87 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <title>Xiangqi - play online</title>
+    
+    <!-- Encoding -->
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+    <meta content="utf-8" http-equiv="encoding">
+    
+    <!-- SEO -->
+    <meta name="description" content="Didactic Chinese chess Xiangqi engine by Code Monkey King">
+    <meta name="keywords" content="play xiangqi online chinese chess engine javascript">
+    
+    <!-- Bootstrap -->
+    <link rel="stylesheet" href="/static/libs/css/bootstrap.min.css">
+    <script src="/static/libs/js/jquery.min.js"></script>
+    <script src="/static/libs/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Analytics -->
+    <script type="text/javascript">
+      if (window.location.href.includes('github')) {
+        $.post('https://maksimkorzh.pythonanywhere.com/analytics/api/post', {
+          date: new Date,
+          url: window.location.href
+        });
+      }
+    </script>
+    
+  </head>
+  <body style="font-family:
+               monospace; font-size: 16px;
+               background: url(/static/game/images/misc/);
+               background-repeat: no-repeat;
+               background-attachment: fixed;
+               background-position: center;
+               background-size: cover;
+               display: flex;
+               justify-content: center;
+               align-items: center;
+               "
+        
+        class="img-fluid bg-cover text-center">
+    
+    <div class="col-3">
+      <h1 class="mt-5 ">New game</h1>
+      
+      <ul id="boards" class="list-group"></ul>
+    </div>
+  
+  </body>
+  <script>
+    let boards = `
+      <li class="list-group-item mt-2">
+        Board %brdNum
+        <hr>
+        <a id="red_%brdNum" class="col btn btn-danger mb-1" href="/board/%brdNum?side=red">Join</a>
+        <a id="black_%brdNum" class="col btn btn-dark" href="/board/%brdNum?side=black">Join</a>
+      </li>
+    `
+    
+    // render games
+    for (let index = 1; index < 4; index++) {
+      document.getElementById('boards').innerHTML += boards.split('%brdNum').join(index);
+    }
+    
+    // get game status
+    for (let gameId = 1; gameId < 4; gameId++) {
+      $.get('/board?gameId=' + gameId + '&side=none&move=get', function(response) {
+        let parseResponse = JSON.parse(response);
+        console.log('UDP GET response:', parseResponse);
+        
+        // disable joining ongoing games
+        if (parseResponse.red == true) document.getElementById('red_' + gameId).classList.add('disabled');
+        if (parseResponse.black == true) document.getElementById('black_' + gameId).classList.add('disabled');
+      });
+    }
+
+  </script>
+</html>
+
+
+
+
+
+
+
+
