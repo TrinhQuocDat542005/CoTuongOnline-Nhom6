@@ -1,15 +1,19 @@
 # import packages
 import socket
 import json
+import threading # 1. Import thư viện threading
 
 # define IP and PORT
-IP = '127.0.0.1'
+IP = '0.0.0.0'
 PORT = 8888
 BYTES = 1024
 
 # create server side socket
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 server_socket.bind((IP, PORT))
+
+# Tạo Lock để đồng bộ hóa dữ liệu khi nhiều luồng cùng truy cập 'boards'
+board_lock = threading.Lock() 
 
 # initialize game boards
 boards = []
@@ -48,20 +52,19 @@ def handle_move(game, move):
     except ValueError:
         return "Invalid move format"
 
-# Listen for incoming requests
-try:
-    while True:
-        client_data, client_addr = server_socket.recvfrom(BYTES)
-        
-        # Parse client data
-        try:
-            client_data = json.loads(client_data.decode())
-            print('Received from client:', client_data, client_addr)
-        except json.JSONDecodeError:
-            print("Error: Failed to decode JSON data from client.")
-            server_socket.sendto(b'Invalid data format', client_addr)
-            continue
+# 2. Hàm xử lý logic cho từng Client (chạy trên thread riêng)
+def process_client_request(client_data_bytes, client_addr):
+    # Parse client data
+    try:
+        client_data = json.loads(client_data_bytes.decode())
+        print(f'[Thread-{threading.get_ident()}] Received from {client_addr}: {client_data}')
+    except json.JSONDecodeError:
+        print("Error: Failed to decode JSON data from client.")
+        server_socket.sendto(b'Invalid data format', client_addr)
+        return
 
+    # --- BẮT ĐẦU CRITICAL SECTION (Khóa dữ liệu dùng chung) ---
+    with board_lock: 
         # Process the game board based on gameId
         try:
             game_id = int(client_data.get('gameId')) - 1
@@ -71,11 +74,12 @@ try:
         except (ValueError, IndexError) as e:
             print(e)
             server_socket.sendto(b'Board does not exist', client_addr)
-            continue
+            return # Thoát hàm nếu lỗi
 
         # Handle the move request
         action = client_data.get('move')
         side = client_data.get('side', '')  # Either "red" or "black"
+        
         if action == 'connect':
             response = handle_connect(game, side)
         elif action == 'disconnect':
@@ -84,10 +88,23 @@ try:
             response = json.dumps(game)
         else:
             response = handle_move(game, action)
+    # --- KẾT THÚC CRITICAL SECTION (Tự động mở khóa) ---
+
+    # Send response back to client
+    server_socket.sendto(str.encode(response), client_addr)
+    print(f'[Thread-{threading.get_ident()}] Sent response to {client_addr}: {response}')
+
+
+# Listen for incoming requests
+print(f"Server is listening on {IP}:{PORT}...")
+try:
+    while True:
+        # Main thread chỉ nhận dữ liệu, không xử lý logic
+        client_data, client_addr = server_socket.recvfrom(BYTES)
         
-        # Send response back to client
-        server_socket.sendto(str.encode(response), client_addr)
-        print('Sent response to client:', response)
+        # 3. Tạo luồng mới để xử lý yêu cầu này
+        t = threading.Thread(target=process_client_request, args=(client_data, client_addr))
+        t.start() # Khởi chạy luồng
 
 finally:
     # Close server socket on exit
